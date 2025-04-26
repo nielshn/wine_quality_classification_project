@@ -1,137 +1,161 @@
-# Laporan Proyek Machine Learning: Klasifikasi Kualitas Wine
+# Wine Quality Classification - Final Submission
 
 ## 1. Domain Proyek
 
-Proyek ini bertujuan untuk mengklasifikasikan kualitas wine (baik red maupun white wine) berdasarkan data sifat kimiawi dari masing-masing sampel. Kualitas wine sangat mempengaruhi persepsi pasar dan penentuan harga, oleh karena itu prediksi kualitas berbasis data sangat krusial untuk efisiensi industri wine.
+Proyek ini bertujuan untuk mengklasifikasikan kualitas wine menjadi dua kategori:
+- Rendah (Low Quality: label 0)
+- Tinggi (High Quality: label 1)
 
-Masalah ini perlu diselesaikan karena pendekatan manual dalam menilai kualitas wine rawan subjektivitas dan inkonsistensi. Pendekatan machine learning dapat membantu memberikan sistem penilaian yang lebih objektif dan konsisten.
+Klasifikasi dilakukan berdasarkan fitur-fitur kimia seperti kadar alkohol, keasaman, pH, kadar gula, dan lain-lain.
 
-**Referensi:**
-- Cortez, P., Cerdeira, A., Almeida, F., Matos, T., & Reis, J. (2009). *Modeling wine preferences by data mining from physicochemical properties.* Decision Support Systems, 47(4), 547–553. [Link](https://www.sciencedirect.com/science/article/abs/pii/S0167923609001565)
+**Sumber Data:**
+- UCI Machine Learning Repository
+- URL: https://archive.ics.uci.edu/ml/datasets/Wine+Quality
+
+Dataset ini menggabungkan dua jenis wine: merah dan putih.
 
 ---
 
 ## 2. Business Understanding
 
-### Problem Statement
-Bagaimana cara membangun model machine learning yang mampu memprediksi kualitas wine (dalam skala 0-10) berdasarkan data kimiawi dari wine tersebut?
+**Permasalahan:**
+Produsen wine ingin memprediksi kualitas produknya secara otomatis, menggunakan data kimiawi hasil produksi, sehingga dapat menghemat waktu dan meningkatkan kontrol kualitas.
 
-### Goals
-- Menghasilkan model klasifikasi kualitas wine yang akurat dan andal.
-- Menyediakan pendekatan data-driven untuk mendukung keputusan kualitas produk dalam industri wine.
+**Goal:**
+Mengembangkan model machine learning untuk mengklasifikasikan wine berkualitas tinggi dan rendah.
 
-### Solution Statement
-Kami mengusulkan beberapa solusi:
-1. **Decision Tree** untuk baseline model.
-2. **Random Forest & XGBoost** sebagai model lanjutan untuk meningkatkan performa.
-3. **SMOTE** untuk menyeimbangkan distribusi kelas target agar performa model optimal.
-
-Evaluasi dilakukan menggunakan metrik **Accuracy**, **Precision**, **Recall**, **F1-score**, dan **ROC-AUC**.
+**Solution Statement:**
+- Membangun dan membandingkan tiga model: Decision Tree, Random Forest, dan XGBoost.
+- Menangani imbalance data menggunakan SMOTE.
+- Menggunakan metrik evaluasi seperti Accuracy, Precision, Recall, F1-Score, dan ROC AUC untuk memilih model terbaik.
 
 ---
 
 ## 3. Data Understanding
 
-- **Jumlah Data:** 4.898 observasi
-- **Jumlah Fitur:** 11 fitur + 1 label
-- **Link Dataset:** [Wine Quality Dataset - UCI Repository](https://archive.ics.uci.edu/ml/datasets/Wine+Quality)
+**Informasi Dataset:**
+- **Jumlah Baris:** 6497
+- **Jumlah Kolom:** 13
 
-### Fitur-Fitur:
-- `fixed acidity`
-- `volatile acidity`
-- `citric acid`
-- `residual sugar`
-- `chlorides`
-- `free sulfur dioxide`
-- `total sulfur dioxide`
-- `density`
-- `pH`
-- `sulphates`
-- `alcohol`
-- `quality` (target)
+**Kondisi Data:**
+- Tidak ada missing value.
+- Terdapat beberapa duplikasi data.
+- Ditemukan beberapa outlier pada fitur numerik.
 
-### EDA & Visualisasi:
-- Distribusi label menunjukkan ketidakseimbangan kelas (banyak di nilai 5 dan 6).
-- Korelasi tinggi ditemukan antara `alcohol` dan `quality`.
-- Visualisasi heatmap dan boxplot digunakan untuk insight dan deteksi outlier.
+**Fitur-fitur:**
+1. fixed acidity
+2. volatile acidity
+3. citric acid
+4. residual sugar
+5. chlorides
+6. free sulfur dioxide
+7. total sulfur dioxide
+8. density
+9. pH
+10. sulphates
+11. alcohol
+12. type (red/white)
+13. quality (nilai 0-10)
+14. quality_label (hasil transformasi klasifikasi 0 atau 1)
 
 ---
 
 ## 4. Data Preparation
 
-### Langkah-Langkah:
-1. **Pembersihan Data:** Tidak ada missing value yang perlu ditangani.
-2. **Normalisasi:** Menggunakan `StandardScaler` untuk menormalkan fitur numerik.
-3. **Balancing Data:** Menggunakan teknik **SMOTE** untuk oversampling kelas minoritas.
-4. **Feature Engineering:** Membuat fitur turunan seperti `alcohol_density_ratio`.
+Pada tahap ini dilakukan beberapa tahapan pemrosesan data:
 
-### Alasan:
-- Normalisasi penting karena algoritma seperti SVM dan XGBoost sensitif terhadap skala fitur.
-- Balancing diperlukan untuk menghindari bias model ke kelas mayoritas.
+- **Handling Outlier:**
+  - Menghapus data ekstrem menggunakan metode IQR untuk menjaga stabilitas model.
+
+- **Feature Engineering:**
+  - Membuat kolom baru `quality_label` berdasarkan skor `quality`.
+  - Label 1 untuk skor >=7 (tinggi), Label 0 untuk skor <7 (rendah).
+
+- **Splitting Data:**
+  - Data dibagi menjadi training dan testing set dengan rasio 80:20.
+
+- **Feature Scaling:**
+  - Melakukan normalisasi fitur numerik menggunakan `StandardScaler` agar fitur memiliki skala yang seragam.
+
+- **Balancing Data:**
+  - Menggunakan `SMOTE` (Synthetic Minority Oversampling Technique) untuk mengatasi masalah imbalance label.
 
 ---
 
 ## 5. Modeling
 
-### Algoritma:
-1. **Decision Tree**
-2. **Random Forest**
-3. **XGBoost**
+### Model 1: Decision Tree Classifier
 
-### Hyperparameter Tuning:
-- `Decision Tree:` `max_depth`, `min_samples_split`
-- `Random Forest:` `n_estimators`, `max_depth`
-- `XGBoost:` `learning_rate`, `n_estimators`, `max_depth`
+**Cara Kerja:**
+- Membentuk pohon keputusan berdasarkan fitur yang paling baik memisahkan kelas.
+- Pemilihan fitur didasarkan pada pengukuran impuritas seperti Gini Impurity.
 
-### Kelebihan & Kekurangan:
-- **Decision Tree:** Mudah dipahami, rawan overfitting.
-- **Random Forest:** Robust, lebih lama training.
-- **XGBoost:** Akurasi tinggi, tapi tuning kompleks.
+**Parameter:**
+- `criterion='gini'` (default)
+- `random_state=42`
+
+**Kelebihan:**
+- Interpretasi mudah, dapat divisualisasikan.
+
+**Kekurangan:**
+- Rentan overfitting tanpa teknik pruning.
+
+---
+
+### Model 2: Random Forest Classifier
+
+**Cara Kerja:**
+- Membentuk banyak pohon keputusan di atas subset data berbeda, lalu mengambil voting mayoritas untuk prediksi.
+- Mengurangi variansi model tunggal.
+
+**Parameter:**
+- `n_estimators=100` (default)
+- `random_state=42`
+
+**Kelebihan:**
+- Lebih akurat dan tahan terhadap overfitting.
+
+**Kekurangan:**
+- Sulit untuk interpretasi model secara keseluruhan.
+
+---
+
+### Model 3: XGBoost Classifier
+
+**Cara Kerja:**
+- Menggunakan teknik boosting berbasis gradient descent untuk mengurangi error secara iteratif.
+- Setiap model berikutnya fokus memperbaiki kesalahan dari model sebelumnya.
+
+**Parameter:**
+- `use_label_encoder=False`
+- `eval_metric='logloss'`
+
+**Kelebihan:**
+- Sangat kuat dan efektif untuk dataset tabular besar.
+
+**Kekurangan:**
+- Membutuhkan tuning parameter yang lebih kompleks.
 
 ---
 
 ## 6. Evaluation
 
-### Metrik Evaluasi:
-- **Accuracy**
-- **Precision**
-- **Recall**
-- **F1-score**
-- **ROC-AUC (jika tersedia)**
+Model dievaluasi menggunakan metrik berikut:
 
-### Hasil Evaluasi (Setelah Tuning dan Balancing dengan SMOTE):
+- **Accuracy:** Persentase prediksi yang benar.
+- **Precision, Recall, F1-Score:** Untuk menilai keseimbangan performa model.
+- **ROC AUC Curve:** Untuk menilai kemampuan model membedakan antar kelas.
 
-| Model          | Accuracy | Precision (class 1) | Recall (class 1) | F1-Score (class 1) |
-|----------------|----------|---------------------|------------------|--------------------|
-| Decision Tree  | 0.823    | 0.56                | 0.75             | 0.64               |
-| SVM            | 0.811    | 0.54                | 0.75             | 0.63               |
-| Random Forest  | **0.867**| **0.66**            | **0.76**         | **0.71**           |
-| XGBoost        | 0.858    | 0.65                | 0.71             | 0.68               |
+**Hasil evaluasi:**
+- Random Forest dan XGBoost menunjukkan kinerja lebih baik dibandingkan Decision Tree setelah balancing dan tuning sederhana.
 
-> Catatan:
-- Kelas `0` (umumnya wine berkualitas biasa) masih mendominasi data, namun performa di kelas `1` (wine berkualitas tinggi) jadi fokus evaluasi karena ini yang lebih kritikal dalam bisnis.
-- Model **Random Forest** memberikan keseimbangan terbaik antara recall dan f1-score untuk kelas minoritas (1), yang berarti model ini cukup andal dalam mengidentifikasi wine berkualitas tinggi tanpa terlalu banyak false positive.
-
-### Model Terbaik:
-**Random Forest** dipilih sebagai model terbaik karena:
-- Mencapai akurasi tertinggi (0.867)
-- Memiliki **F1-score tertinggi untuk kelas 1** (0.71)
-- Recall untuk kelas minoritas juga paling tinggi (0.76), yang penting untuk meminimalkan false negative terhadap wine berkualitas tinggi.
+Visualisasi ROC Curve membuktikan AUC Score tertinggi didapatkan oleh Random Forest.
 
 ---
 
+## 7. Conclusion
 
+Model Random Forest dipilih sebagai model terbaik untuk mengklasifikasikan kualitas wine karena memberikan skor akurasi, recall, precision, dan AUC terbaik setelah balancing data menggunakan SMOTE.
 
-## 7. Kesimpulan
+Untuk meningkatkan akurasi lebih lanjut, model dapat dioptimasi dengan teknik hyperparameter tuning lanjutan seperti Randomized Search atau Grid Search pada n_estimators, max_depth, dan learning_rate.
 
-- Model XGBoost terbukti menjadi solusi terbaik dalam klasifikasi kualitas wine.
-- Teknik SMOTE efektif dalam menangani ketidakseimbangan kelas.
-- Pendekatan machine learning memberikan alternatif yang powerful untuk menilai kualitas produk wine secara objektif dan data-driven.
-
----
-
-## 8. Struktur Laporan
-
-- Mengikuti urutan: Domain → Business Understanding → Data Understanding → Preparation → Modeling → Evaluation.
-- Penjelasan teknis dilengkapi dengan snippet kode (dalam notebook).
-- Visualisasi dan resources dapat dimuat dengan baik dalam format markdown.
