@@ -1,157 +1,182 @@
-# Import Libraries
-from sklearn.metrics import ConfusionMatrixDisplay
-from imblearn.over_sampling import SMOTE
-from xgboost import XGBClassifier
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_curve, auc
-from sklearn.preprocessing import StandardScaler
+# Wine Quality Classification Final Submission
+
+# === 1. Domain Proyek ===
+"""
+Proyek ini bertujuan untuk mengklasifikasikan kualitas wine menjadi dua kelas:
+- Rendah (Low Quality, 0)
+- Tinggi (High Quality, 1)
+berdasarkan fitur-fitur kimiawi seperti keasaman, pH, kadar alkohol, dan lain-lain.
+
+Sumber Data: UCI Machine Learning Repository
+URL: https://archive.ics.uci.edu/ml/datasets/Wine+Quality
+"""
+
+# === 2. Business Understanding ===
+"""
+Permasalahan:
+Produsen wine ingin mengoptimalkan proses produksi dengan memprediksi kualitas produk berdasarkan parameter kimia selama proses produksi.
+
+Goal:
+Mengembangkan model klasifikasi yang dapat mengkategorikan kualitas wine sebagai 'Rendah' atau 'Tinggi'.
+
+Solution Statement:
+- Membandingkan beberapa algoritma ML: Decision Tree, Random Forest, dan XGBoost.
+- Menggunakan balancing data dengan SMOTE.
+- Menggunakan evaluasi berbasis Accuracy, Precision, Recall, F1-Score, dan AUC.
+"""
+
+# === 3. Data Understanding ===
+
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
-
-
-# Load Datasets
+# Load dataset
 red = pd.read_csv("winequality-red.csv", sep=';')
 white = pd.read_csv("winequality-white.csv", sep=';')
-red["type"], white["type"] = "red", "white"
-df = pd.concat([red, white], axis=0)
+red['type'], white['type'] = 'red', 'white'
+wine = pd.concat([red, white], axis=0)
 
-# Binary target: 0 (low: 3–6), 1 (high: 7–9)
-df['quality_label'] = df['quality'].apply(lambda q: 1 if q >= 7 else 0)
+# Tambahkan kolom binary target
+wine['quality_label'] = wine['quality'].apply(lambda x: 1 if x >= 7 else 0)
 
-# ==== Exploratory Data Analysis (EDA) ====
-# Distribusi label
-plt.figure(figsize=(6, 4))
-sns.countplot(x='quality_label', hue='type', data=df)
-plt.title("Distribusi Kualitas Wine")
-plt.xlabel("Label Kualitas (0 = Rendah, 1 = Tinggi)")
+# Jumlah baris dan kolom
+display(wine.shape)
+
+# Kondisi data: Missing Value & Duplicate
+print("Missing values:\n", wine.isnull().sum())
+print("\nDuplicate records:", wine.duplicated().sum())
+
+# Uraian Fitur:
+"""
+- fixed acidity: tingkat keasaman tetap
+- volatile acidity: tingkat keasaman volatil
+- citric acid: konsentrasi asam sitrat
+- residual sugar: sisa gula
+- chlorides: kadar klorida
+- free sulfur dioxide: sulfur dioksida bebas
+- total sulfur dioxide: total sulfur dioksida
+- density: kerapatan
+- pH: tingkat keasaman
+- sulphates: konsentrasi sulfat
+- alcohol: kadar alkohol
+- type: jenis wine (merah/putih)
+- quality: nilai kualitas asli (0-10)
+- quality_label: label klasifikasi (0 rendah, 1 tinggi)
+"""
+
+# Korelasi antar fitur numerik
+plt.figure(figsize=(12,10))
+sns.heatmap(wine.drop(['quality', 'type'], axis=1).corr(), annot=True, cmap='coolwarm')
+plt.title('Korelasi antar Fitur')
 plt.tight_layout()
 plt.show()
 
-# Korelasi fitur
-plt.figure(figsize=(12, 10))
-sns.heatmap(df.drop(['quality', 'type'], axis=1).corr(),
-            annot=True, cmap='coolwarm')
-plt.title("Korelasi antar Fitur")
-plt.tight_layout()
-plt.show()
+# === 4. Data Preparation ===
 
-# Boxplot sebelum outlier removal
-features = df.columns[:-3]
-plt.figure(figsize=(20, 15))
-for i, feature in enumerate(features):
-    plt.subplot(4, 3, i+1)
-    sns.boxplot(x='quality_label', y=feature, data=df)
-    plt.title(f"{feature} vs Kualitas")
-plt.tight_layout()
-plt.show()
-
-# ==== Outlier Removal ====
-
-
+# Remove outliers menggunakan IQR
+features = wine.columns[:-3]
 def remove_outliers(df, features):
-    df_clean = df.copy()
     for feature in features:
-        Q1 = df_clean[feature].quantile(0.25)
-        Q3 = df_clean[feature].quantile(0.75)
+        Q1 = df[feature].quantile(0.25)
+        Q3 = df[feature].quantile(0.75)
         IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        df_clean = df_clean[(df_clean[feature] >= lower_bound)
-                            & (df_clean[feature] <= upper_bound)]
-    return df_clean
+        lower = Q1 - 1.5 * IQR
+        upper = Q3 + 1.5 * IQR
+        df = df[(df[feature] >= lower) & (df[feature] <= upper)]
+    return df
 
+wine_clean = remove_outliers(wine.copy(), features)
 
-df_clean = remove_outliers(df, features)
+# Fitur dan Target
+X = wine_clean.drop(['quality', 'quality_label', 'type'], axis=1)
+y = wine_clean['quality_label']
 
-# ==== Preprocessing ====
-X = df_clean.drop(['quality', 'quality_label', 'type'], axis=1)
-y = df_clean['quality_label']
+# Train-Test Split
+from sklearn.model_selection import train_test_split
+X_train_raw, X_test_raw, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-X_train_raw, X_test_raw, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42)
+# Scaling
+from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train_raw)
 X_test_scaled = scaler.transform(X_test_raw)
 
-# ==== SMOTE ====
+# Balancing data dengan SMOTE
+from imblearn.over_sampling import SMOTE
 sm = SMOTE(random_state=42)
 X_train_smote, y_train_smote = sm.fit_resample(X_train_scaled, y_train)
 
-# ==== Modeling ====
+# === 5. Model Development ===
 
-# Decision Tree
-dt = DecisionTreeClassifier(random_state=42)
-dt.fit(X_train_smote, y_train_smote)
-print("DT Accuracy:", accuracy_score(y_test, dt.predict(X_test_scaled)))
+# Decision Tree Classifier
+"""
+Algoritma berbasis pohon keputusan sederhana.
+Membagi data berdasarkan fitur untuk mencapai klasifikasi paling bersih.
+Parameter utama: criterion (gini/entropy), max_depth.
+"""
+from sklearn.tree import DecisionTreeClassifier
 
-# Random Forest (Randomized Search)
-rf = RandomForestClassifier(random_state=42)
-param_rf = {
-    'n_estimators': [100, 200],
-    'max_depth': [None, 10, 20],
-    'min_samples_split': [2, 5],
-    'min_samples_leaf': [1, 2],
-    'max_features': ['sqrt']
+dt_model = DecisionTreeClassifier(random_state=42)
+dt_model.fit(X_train_smote, y_train_smote)
+
+# Random Forest Classifier
+"""
+Ensemble learning berbasis banyak pohon keputusan.
+Mengambil rata-rata prediksi untuk meningkatkan akurasi dan mencegah overfitting.
+Parameter utama: n_estimators, max_depth, max_features.
+"""
+from sklearn.ensemble import RandomForestClassifier
+
+rf_model = RandomForestClassifier(random_state=42)
+rf_model.fit(X_train_smote, y_train_smote)
+
+# XGBoost Classifier
+"""
+Model boosting berbasis gradient descent.
+Mengoptimalkan prediksi melalui ensemble weak learners.
+Parameter utama: learning_rate, n_estimators, max_depth.
+"""
+from xgboost import XGBClassifier
+
+xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+xgb_model.fit(X_train_smote, y_train_smote)
+
+# === 6. Evaluation ===
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
+import matplotlib.pyplot as plt
+
+models = {
+    'Decision Tree': dt_model,
+    'Random Forest': rf_model,
+    'XGBoost': xgb_model
 }
-rf_search = RandomizedSearchCV(
-    rf, param_rf, n_iter=10, cv=5,
-    scoring='accuracy', n_jobs=-1, random_state=42)
-rf_search.fit(X_train_smote, y_train_smote)
-rf_best = rf_search.best_estimator_
-print("Random Forest (Tuned) Accuracy:", accuracy_score(
-    y_test, rf_best.predict(X_test_scaled)))
 
-# SVM (Grid Search)
-svm = SVC(probability=True)
-svm_param = {'C': [0.1, 1, 10], 'gamma': ['scale', 0.01]}
-svm_search = GridSearchCV(svm, svm_param, cv=5, scoring='accuracy', n_jobs=-1)
-svm_search.fit(X_train_smote, y_train_smote)
-svm_best = svm_search.best_estimator_
-print("SVM Accuracy:", accuracy_score(y_test, svm_best.predict(X_test_scaled)))
-
-# XGBoost
-xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
-xgb.fit(X_train_smote, y_train_smote)
-print("XGBoost Accuracy:", accuracy_score(y_test, xgb.predict(X_test_scaled)))
-
-
-def evaluate_model(name, model, X_test, y_test):
-    y_pred = model.predict(X_test)
-    print(f"\n===== {name} =====")
-    print("Accuracy:", accuracy_score(y_test, y_pred))
+for name, model in models.items():
+    print(f"\n{name}:")
+    y_pred = model.predict(X_test_scaled)
     print("Classification Report:\n", classification_report(y_test, y_pred))
     cm = confusion_matrix(y_test, y_pred)
-    ConfusionMatrixDisplay(cm, display_labels=[
-                           "Low Quality", "High Quality"]).plot(cmap='Blues')
-    plt.title(f"Confusion Matrix - {name}")
-    plt.tight_layout()
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.title(f'Confusion Matrix - {name}')
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
     plt.show()
 
+# ROC Curve Comparison
+plt.figure(figsize=(8,6))
+for name, model in models.items():
+    y_prob = model.predict_proba(X_test_scaled)[:,1]
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    auc_score = roc_auc_score(y_test, y_prob)
+    plt.plot(fpr, tpr, label=f'{name} (AUC = {auc_score:.2f})')
 
-evaluate_model("Decision Tree", dt, X_test_scaled, y_test)
-evaluate_model("Random Forest", rf_best, X_test_scaled, y_test)
-evaluate_model("SVM", svm_best, X_test_scaled, y_test)
-evaluate_model("XGBoost", xgb, X_test_scaled, y_test)
-
-
-# ==== ROC Curve (Random Forest) ====
-y_proba_rf = rf_best.predict_proba(X_test_scaled)[:, 1]
-fpr, tpr, _ = roc_curve(y_test, y_proba_rf)
-roc_auc = auc(fpr, tpr)
-
-plt.figure(figsize=(8, 6))
-plt.plot(
-    fpr, tpr, label=f"Random Forest AUC = {roc_auc:.2f}", color='darkorange')
-plt.plot([0, 1], [0, 1], linestyle='--', color='gray')
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.title("ROC Curve - Random Forest")
+plt.plot([0,1],[0,1],'k--')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curve Comparison')
 plt.legend()
-plt.grid(True)
+plt.grid()
 plt.tight_layout()
 plt.show()
