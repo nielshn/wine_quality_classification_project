@@ -31,6 +31,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from imblearn.over_sampling import SMOTE
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
 
 # Load dataset
 red = pd.read_csv("winequality-red.csv", sep=';')
@@ -67,8 +74,9 @@ print("\nDuplicate records:", wine.duplicated().sum())
 """
 
 # Korelasi antar fitur numerik
-plt.figure(figsize=(12,10))
-sns.heatmap(wine.drop(['quality', 'type'], axis=1).corr(), annot=True, cmap='coolwarm')
+plt.figure(figsize=(12, 10))
+sns.heatmap(wine.drop(['quality', 'type'], axis=1).corr(),
+            annot=True, cmap='coolwarm')
 plt.title('Korelasi antar Fitur')
 plt.tight_layout()
 plt.show()
@@ -77,6 +85,8 @@ plt.show()
 
 # Remove outliers menggunakan IQR
 features = wine.columns[:-3]
+
+
 def remove_outliers(df, features):
     for feature in features:
         Q1 = df[feature].quantile(0.25)
@@ -87,6 +97,7 @@ def remove_outliers(df, features):
         df = df[(df[feature] >= lower) & (df[feature] <= upper)]
     return df
 
+
 wine_clean = remove_outliers(wine.copy(), features)
 
 # Fitur dan Target
@@ -94,17 +105,15 @@ X = wine_clean.drop(['quality', 'quality_label', 'type'], axis=1)
 y = wine_clean['quality_label']
 
 # Train-Test Split
-from sklearn.model_selection import train_test_split
-X_train_raw, X_test_raw, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42)
 
 # Scaling
-from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train_raw)
 X_test_scaled = scaler.transform(X_test_raw)
 
 # Balancing data dengan SMOTE
-from imblearn.over_sampling import SMOTE
 sm = SMOTE(random_state=42)
 X_train_smote, y_train_smote = sm.fit_resample(X_train_scaled, y_train)
 
@@ -116,7 +125,6 @@ Algoritma berbasis pohon keputusan sederhana.
 Membagi data berdasarkan fitur untuk mencapai klasifikasi paling bersih.
 Parameter utama: criterion (gini/entropy), max_depth.
 """
-from sklearn.tree import DecisionTreeClassifier
 
 dt_model = DecisionTreeClassifier(random_state=42)
 dt_model.fit(X_train_smote, y_train_smote)
@@ -127,7 +135,6 @@ Ensemble learning berbasis banyak pohon keputusan.
 Mengambil rata-rata prediksi untuk meningkatkan akurasi dan mencegah overfitting.
 Parameter utama: n_estimators, max_depth, max_features.
 """
-from sklearn.ensemble import RandomForestClassifier
 
 rf_model = RandomForestClassifier(random_state=42)
 rf_model.fit(X_train_smote, y_train_smote)
@@ -138,14 +145,12 @@ Model boosting berbasis gradient descent.
 Mengoptimalkan prediksi melalui ensemble weak learners.
 Parameter utama: learning_rate, n_estimators, max_depth.
 """
-from xgboost import XGBClassifier
 
-xgb_model = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+xgb_model = XGBClassifier(use_label_encoder=False,
+                          eval_metric='logloss', random_state=42)
 xgb_model.fit(X_train_smote, y_train_smote)
 
 # === 6. Evaluation ===
-from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
-import matplotlib.pyplot as plt
 
 models = {
     'Decision Tree': dt_model,
@@ -165,14 +170,14 @@ for name, model in models.items():
     plt.show()
 
 # ROC Curve Comparison
-plt.figure(figsize=(8,6))
+plt.figure(figsize=(8, 6))
 for name, model in models.items():
-    y_prob = model.predict_proba(X_test_scaled)[:,1]
+    y_prob = model.predict_proba(X_test_scaled)[:, 1]
     fpr, tpr, _ = roc_curve(y_test, y_prob)
     auc_score = roc_auc_score(y_test, y_prob)
     plt.plot(fpr, tpr, label=f'{name} (AUC = {auc_score:.2f})')
 
-plt.plot([0,1],[0,1],'k--')
+plt.plot([0, 1], [0, 1], 'k--')
 plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
 plt.title('ROC Curve Comparison')
