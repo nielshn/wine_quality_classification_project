@@ -26,35 +26,56 @@ Solution Statement:
 """
 
 # === 3. Data Understanding ===
-
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from imblearn.over_sampling import SMOTE
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier
+# 1. Import Libraries
 from xgboost import XGBClassifier
+from imblearn.over_sampling import SMOTE
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 # Load dataset
 red = pd.read_csv("winequality-red.csv", sep=';')
 white = pd.read_csv("winequality-white.csv", sep=';')
 red['type'], white['type'] = 'red', 'white'
 wine = pd.concat([red, white], axis=0)
-
-# Tambahkan kolom binary target
 wine['quality_label'] = wine['quality'].apply(lambda x: 1 if x >= 7 else 0)
 
-# Jumlah baris dan kolom
-display(wine.shape)
+# 3. EDA
+# 3. Exploratory Data Analysis (EDA)
 
-# Kondisi data: Missing Value & Duplicate
-print("Missing values:\n", wine.isnull().sum())
-print("\nDuplicate records:", wine.duplicated().sum())
+# Distribusi label
+plt.figure(figsize=(6, 4))
+sns.countplot(x='quality_label', data=wine)
+plt.title("Distribusi Kualitas Wine")
+plt.xlabel("Label Kualitas (0 = Rendah, 1 = Tinggi)")
+plt.ylabel("Jumlah")
+plt.tight_layout()
+plt.show()
 
+# Korelasi antar fitur (filter kolom numerik saja)
+plt.figure(figsize=(12, 10))
+numerical_cols = wine.select_dtypes(include=['float64', 'int64'])
+sns.heatmap(numerical_cols.corr(), annot=True, cmap='coolwarm')
+plt.title("Heatmap Korelasi Antar Fitur Numerik")
+plt.tight_layout()
+plt.show()
+
+# Boxplot per fitur numerik
+features = wine.select_dtypes(include=['float64', 'int64']).drop(
+    columns=['quality', 'quality_label']).columns
+plt.figure(figsize=(20, 15))
+for i, col in enumerate(features):
+    plt.subplot(4, 3, i + 1)
+    sns.boxplot(x='quality_label', y=col, data=wine)
+    plt.title(f"Boxplot: {col} vs Quality Label")
+plt.tight_layout()
+plt.show()
 # Uraian Fitur:
 """
 - fixed acidity: tingkat keasaman tetap
@@ -82,38 +103,33 @@ plt.tight_layout()
 plt.show()
 
 # === 4. Data Preparation ===
+numerical_cols = wine.select_dtypes(include=["float64", "int64"]).drop(
+    columns=["quality", "quality_label"]).columns
 
-# Remove outliers menggunakan IQR
-features = wine.columns[:-3]
 
-
-def remove_outliers(df, features):
-    for feature in features:
-        Q1 = df[feature].quantile(0.25)
-        Q3 = df[feature].quantile(0.75)
+def remove_outliers(df, columns):
+    cleaned_df = df.copy()
+    for col in columns:
+        Q1 = cleaned_df[col].quantile(0.25)
+        Q3 = cleaned_df[col].quantile(0.75)
         IQR = Q3 - Q1
         lower = Q1 - 1.5 * IQR
         upper = Q3 + 1.5 * IQR
-        df = df[(df[feature] >= lower) & (df[feature] <= upper)]
-    return df
+        cleaned_df = cleaned_df[(cleaned_df[col] >= lower)
+                                & (cleaned_df[col] <= upper)]
+    return cleaned_df
 
 
-wine_clean = remove_outliers(wine.copy(), features)
-
-# Fitur dan Target
+wine_clean = remove_outliers(wine.copy(), numerical_cols)
 X = wine_clean.drop(['quality', 'quality_label', 'type'], axis=1)
 y = wine_clean['quality_label']
-
-# Train-Test Split
 X_train_raw, X_test_raw, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42)
 
-# Scaling
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train_raw)
 X_test_scaled = scaler.transform(X_test_raw)
 
-# Balancing data dengan SMOTE
 sm = SMOTE(random_state=42)
 X_train_smote, y_train_smote = sm.fit_resample(X_train_scaled, y_train)
 
@@ -150,8 +166,8 @@ xgb_model = XGBClassifier(use_label_encoder=False,
                           eval_metric='logloss', random_state=42)
 xgb_model.fit(X_train_smote, y_train_smote)
 
-# === 6. Evaluation ===
 
+# === 6. Evaluation ===
 models = {
     'Decision Tree': dt_model,
     'Random Forest': rf_model,
@@ -167,9 +183,10 @@ for name, model in models.items():
     plt.title(f'Confusion Matrix - {name}')
     plt.xlabel('Predicted')
     plt.ylabel('Actual')
+    plt.tight_layout()
     plt.show()
 
-# ROC Curve Comparison
+# ROC Curve
 plt.figure(figsize=(8, 6))
 for name, model in models.items():
     y_prob = model.predict_proba(X_test_scaled)[:, 1]
